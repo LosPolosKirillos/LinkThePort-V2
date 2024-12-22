@@ -32,7 +32,7 @@ namespace CSStudy
 
     }
 
-    class Map
+    class Map //IDrawable
     {
         private char[,] _chars;
 
@@ -73,75 +73,151 @@ namespace CSStudy
         }
     }
 
-    class Player
+    interface IDrawable
+    {
+        void Draw(ConsoleColor defaultColor);
+    }
+
+    class Player : IDrawable
     {
         public int X { get; private set; }
         public int Y { get; private set; }
-        public char Letter { get; private set; }
+        private int _lastX;
+        private int _lastY;
+        private int[] _direction;
+        private char _letter;
+        
 
         public Player(int x, int y, char letter = 'S')
         {
             X = x;
             Y = y;
-            Letter = letter;
+            _letter = letter;
         }
-    }
 
-    class GameObject
-    {
-        public virtual void ShowState()
+        public void Move()
         {
+            _lastX = X;
+            _lastY = Y;
+            X += _direction[0];
+            Y += _direction[1];
+        }
 
+        public void Direction(ConsoleKeyInfo pressedKey)
+        {
+            _direction = new int[2];
+
+            if (pressedKey.Key == ConsoleKey.UpArrow)
+                _direction[1] = -1;
+            else if (pressedKey.Key == ConsoleKey.DownArrow)
+                _direction[1] = 1;
+            else if (pressedKey.Key == ConsoleKey.LeftArrow)
+                _direction[0] = -1;
+            else if (pressedKey.Key == ConsoleKey.RightArrow)
+                _direction[0] = 1;
+        }
+
+        public void Draw(ConsoleColor defaultColor)
+        {
+            Console.SetCursorPosition(_lastX, _lastY);
+            Console.BackgroundColor = defaultColor;
+            Console.Write(' ');
+
+            Console.SetCursorPosition(X, Y);
+            Console.BackgroundColor = ConsoleColor.DarkYellow;
+            Console.Write(_letter);
+
+            Console.BackgroundColor = defaultColor;
         }
     }
 
-    class Port : GameObject
+    class Port : IDrawable
     {
         private int _portX;
         private int _portY;
         private bool _playerInPort;
-        public bool IsVisited { get; private set; }
+        private bool _isVisited;
 
         public Port(int x, int y)
         {
             _portX = x;
             _portY = y;
-            IsVisited = false;
+            _isVisited = false;
         }
 
-        public void CheckPosition(Player player)
+        public void CheckVisitOfPlayer(Player player)
         {
             _playerInPort = player.X == _portX && player.Y == _portY;
+            //Add fuel for visit
         }
 
         public void BecomeVisited()
         {
-            if (IsVisited == false && _playerInPort)
+            if (_isVisited == false && _playerInPort)
             {
-                IsVisited = true;
+                _isVisited = true;
             }
+        }
+
+        public void Draw(ConsoleColor defaultColor)
+        {
+            Console.SetCursorPosition(_portX, _portY);
+            if (_isVisited)
+            {
+                Console.BackgroundColor = ConsoleColor.DarkRed;
+            }
+            else
+            {
+                Console.BackgroundColor = ConsoleColor.DarkGreen;
+            }
+            Console.Write('o');
+
+            Console.BackgroundColor = defaultColor;
         }
     }
 
-    abstract class Field
+    abstract class Field : IDrawable
     {
         protected List<int[]> _field;
+        protected int _hoursRemaining;
+        public bool IsActive
+        {
+            get
+            {
+                return _hoursRemaining > 0;
+            }
+        }
 
-        public Field(Map map, char letter)
+        public Field(Map map, char letter, Random random)
         {
             _field = map.GetCoordinatesOfChar(letter);
-            //if (null) ?
+            _hoursRemaining = random.Next(20, 30);
         }
+
+        public abstract void SpendOneHour();
+
+        public abstract void Draw(ConsoleColor defaultColor);
     }
 
     class Cyclone : Field
     {
-        public Cyclone(Map map, char letter) : base(map, letter) { }
+        public Cyclone(Map map, char letter, Random random) : base(map, letter, random) { }
+
+        public override void SpendOneHour()
+        {
+            _hoursRemaining--;
+        }
+
+        //Draw
     }
 
     class Pirates : Field 
     {
-        public Pirates(Map map, char letter) : base(map, letter) { }
+        public Pirates(Map map, char letter, Random random) : base(map, letter, random) { }
+
+        public override void SpendOneHour() { }
+
+        //Draw
     }
 
 }
