@@ -16,6 +16,7 @@ using System.Security.Cryptography;
 using System.Security.Policy;
 using System.Globalization;
 using System.Diagnostics.Metrics;
+using System.Drawing;
 
 namespace CSStudy
 {
@@ -23,14 +24,111 @@ namespace CSStudy
     {
         static void Main(string[] args)
         {
+            Console.BufferHeight = 1000;
+            Console.BufferWidth = 1000;
 
+            Journey journey = new Journey("world_map.txt");
+            journey.Start();
         }
 
     }
 
     class Journey
     {
+        private Map _map;
+        private List<Port> _ports;
+        private List<Field> _fields = new List<Field>();
+        private Player _player;
+        private DeliveryPoint _deliveryPoint;
+        private ConsoleColor _defaultBackColor;
+        private ConsoleColor _defaultForeColor;
 
+        public Journey(string path)
+        {
+            Random random = new Random();
+            _defaultBackColor = Console.BackgroundColor;
+            _defaultForeColor = Console.ForegroundColor;
+
+            _map = new Map(path);
+            _ports = _map.GetPortsList(random);
+            _fields.Add(new Cyclone(_map, 'W', random));
+            _fields.Add(new Cyclone(_map, 'V', random));
+            _fields.Add(new Pirates(_map, 'P', random));
+            _player = _map.GetPlayerAndStart(_ports, random);
+            _deliveryPoint = _map.GetDelivery(random);
+        }
+
+        public void Start()
+        {
+            bool pointIsReached = false;
+
+            _map.Draw(_defaultBackColor);
+
+            while (true)
+            {
+                foreach (Port port in _ports)
+                {
+                    if (port.IsAlreadyVisited) { continue; }
+                    else
+                    {
+                        if (port.CheckVisitOfPlayer(_player))
+                        {
+                            _player.GetFuelFromPort(port);
+                            port.BecomeVisited();
+                        }
+                    }
+                }
+
+                foreach (Field field in _fields)
+                {
+                    field.UpdateState(new Random());
+                }
+
+                DrawGameObjects();
+                _map.DrawInfoBoard(_player, _defaultBackColor, _defaultForeColor);
+                Console.CursorVisible = false;
+
+                if (_player.IsEnoughFuel && pointIsReached == false)
+                {
+                    _player.SetDirectionOfMove(Console.ReadKey());
+                    _player.Move();
+                    if (_map.DidPlayerCollide(_player))
+                        if (_deliveryPoint.IsPointReached(_player))
+                            pointIsReached = true;
+                        else
+                            _player.CancelMove();
+                    else
+                        foreach (Field field in _fields)
+                        {
+                            if (field.IsActive)
+                                if (field.IsPlayerInField(_player))
+                                {
+                                    _player.GetFuelUsageFromField(field);
+                                }
+                            field.SpendOneHour();
+                        }
+                }
+                else { break; }
+            }
+
+            _map.DrawGameResult(pointIsReached, _defaultForeColor);
+            Console.ReadKey();
+        }
+
+        private void DrawGameObjects()
+        {
+            _player.DrawLastPosition(_defaultBackColor);
+
+            foreach (Port port in _ports)
+                port.Draw(_defaultBackColor);
+
+            foreach (Field field in _fields)
+                field.Draw(_defaultForeColor);
+
+            _deliveryPoint.Draw(_defaultBackColor);
+
+            _player.Draw(_defaultBackColor);
+        }
     }
 
     interface IDrawable
@@ -68,13 +166,14 @@ namespace CSStudy
 
         public Player GetPlayerAndStart(List<Port> ports, Random random)
         {
-            foreach (Port port in ports)
+            while (true)
             {
-                if (random.Next(0, 2) == 1)
-                    return new Player(port.X, port.Y, random);
+                foreach (Port port in ports)
+                {
+                    if (random.Next(0, 20) == 1)
+                        return new Player(port.X, port.Y, random);
+                }
             }
-
-            return new Player(ports[0].X, ports[0].Y, random);
         }
 
         public DeliveryPoint GetDelivery(Random random)
@@ -85,8 +184,9 @@ namespace CSStudy
                 x = random.Next(1, _chars.GetLength(0) - 1);
                 y = random.Next(1, _chars.GetLength(1) - 1);
 
-                if (_chars[x, y] != ' ' &&
-                    _chars[x, y] != 'o')
+                if (_chars[x, y] != ' ' && _chars[x, y] != 'o' &&
+                    _chars[x, y] != 'W' && _chars[x, y] != 'V' &&
+                    _chars[x, y] != 'P')
                 {
                     if (_chars[x, y - 1] == ' ')
                         break;
@@ -116,17 +216,92 @@ namespace CSStudy
             return ports;
         }
 
+        public bool DidPlayerCollide(Player player)
+        {
+            switch (_chars[player.X, player.Y])
+            {
+                case ' ':
+                case 'o':
+                case 'P':
+                case 'W':
+                case 'V':
+                    return false;
+                default:
+                    return true;
+            }
+        }
+
+        public void DrawInfoBoard(Player player, ConsoleColor defaultBackColor, ConsoleColor defaultForeColor)
+        {
+            Console.SetCursorPosition(0, _chars.GetLength(1));
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write($"--- Fuel: {player.Fuel} --- | '");
+            Console.ForegroundColor = defaultForeColor;
+            Console.BackgroundColor = ConsoleColor.DarkGreen;
+            Console.Write("o");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.BackgroundColor = defaultBackColor;
+            Console.Write("' - Active port  | '");
+            Console.ForegroundColor = defaultForeColor;
+            Console.BackgroundColor = ConsoleColor.DarkRed;
+            Console.Write("o");
+            Console.BackgroundColor = defaultBackColor;
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("' - Visited port  | '");
+            Console.ForegroundColor = defaultForeColor;
+            Console.BackgroundColor = ConsoleColor.DarkYellow;
+            Console.Write("S");
+            Console.BackgroundColor = defaultBackColor;
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("' - Your transport (ship)  | '");
+            Console.ForegroundColor = defaultForeColor;
+            Console.BackgroundColor = ConsoleColor.DarkMagenta;
+            Console.Write("D");
+            Console.BackgroundColor = defaultBackColor;
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("' - Delivery point  | '");
+            Console.ForegroundColor = ConsoleColor.DarkBlue;
+            Console.Write("_");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("' - Pirate's activity zone (risk of large fuel loss)\n");
+            Console.ForegroundColor = defaultForeColor;
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("                 | '");
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
+            Console.Write("_");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("' - Cyclone's activity zone (x2 losing fuel)");
+            Console.ForegroundColor = defaultForeColor;
+        }
+
+        public void DrawGameResult(bool pointIsReached, ConsoleColor defaultColor)
+        {
+            Console.SetCursorPosition(0, _chars.GetLength(1) + 1);
+            if (pointIsReached)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.Write("Success! \n");
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.Write("Fail! \n");
+            }
+            Console.ForegroundColor = defaultColor;
+        }
+
         public void Draw(ConsoleColor defaultColor)
         {
             Console.SetCursorPosition(0, 0);
             Console.BackgroundColor = defaultColor;
 
-            for (int x = 0; x < _chars.GetLength(0); x++)
-                for (int y = 0; y < _chars.GetLength(1); y++)
-                    if (_chars[x, y] == 'W' || _chars[x, y] == 'V')
-                        Console.Write(' ');
-                    else
-                        Console.Write(_chars[x, y]);
+            for (int y = 0; y < _chars.GetLength(1); y++)
+            {
+                for (int x = 0; x < _chars.GetLength(0); x++)
+                    Console.Write(_chars[x, y]);
+
+                Console.WriteLine();
+            }
         }
 
         private int GetMaxLengthOfLine(string[] lines)
@@ -151,8 +326,8 @@ namespace CSStudy
         private int _lastY;
         private int[] _direction;
         private char _letter;
-        private int _fuel;
-        public bool IsEnoughFuel { get { return _fuel >= 0; } }
+        public int Fuel { get; private set; }
+        public bool IsEnoughFuel { get { return Fuel > 0; } }
 
 
         public Player(int x, int y, Random random, char letter = 'S')
@@ -160,19 +335,19 @@ namespace CSStudy
             X = x;
             Y = y;
             _letter = letter;
-            _fuel = random.Next(25, 45);
+            Fuel = random.Next(25, 45);
             _direction = new int[2];
         }
 
         public void GetFuelUsageFromField(Field field)
         {
-            if (field.FuelUsage > _fuel)
-                _fuel = 0;
+            if (field.FuelUsage > Fuel)
+                Fuel = 0;
             else
-                _fuel -= field.FuelUsage;
+                Fuel -= field.FuelUsage;
         }
 
-        public void GetFuelFromPort(Port port) { _fuel += port.FuelInPort; }
+        public void GetFuelFromPort(Port port) { Fuel += port.FuelInPort; }
 
         public void Move()
         {
@@ -182,13 +357,18 @@ namespace CSStudy
             X += _direction[0];
             Y += _direction[1];
 
-            if (_lastX != X && _lastY != Y)
-            {
-                _fuel--;
-            }
+            Fuel--;
         }
 
-        public void GetDirectionOfMove(ConsoleKeyInfo pressedKey)
+        public void CancelMove()
+        {
+            X = _lastX;
+            Y = _lastY;
+
+            Fuel++;
+        }
+
+        public void SetDirectionOfMove(ConsoleKeyInfo pressedKey)
         {
             _direction = new int[2];
 
@@ -202,12 +382,17 @@ namespace CSStudy
                 _direction[0] = 1;
         }
 
-        public void Draw(ConsoleColor defaultColor)
+        public void DrawLastPosition(ConsoleColor defaultColor)
         {
             Console.SetCursorPosition(_lastX, _lastY);
             Console.BackgroundColor = defaultColor;
             Console.Write(' ');
 
+            Console.BackgroundColor = defaultColor;
+        }
+
+        public void Draw(ConsoleColor defaultColor)
+        {
             Console.SetCursorPosition(X, Y);
             Console.BackgroundColor = ConsoleColor.DarkYellow;
             Console.Write(_letter);
@@ -222,7 +407,7 @@ namespace CSStudy
         private int _y;
         private char _letter;
 
-        public DeliveryPoint (int x, int y, char letter = 'D')
+        public DeliveryPoint(int x, int y, char letter = 'D')
         {
             _x = x;
             _y = y;
@@ -246,11 +431,10 @@ namespace CSStudy
 
     class Port : IDrawable
     {
+        private char _letter;
         public int X { get; private set; }
         public int Y { get; private set; }
-        private char _letter;
-        private bool _playerInPort;
-        private bool _isVisited;
+        public bool IsAlreadyVisited { get; private set; }
         public int FuelInPort { get; private set; }
 
         public Port(int x, int y, Random random, char letter = 'o')
@@ -258,28 +442,25 @@ namespace CSStudy
             X = x;
             Y = y;
             _letter = letter;
-            _isVisited = false;
+            IsAlreadyVisited = false;
             FuelInPort = random.Next(20, 45);
         }
 
-        public void CheckVisitOfPlayer(Player player)
+        public bool CheckVisitOfPlayer(Player player)
         {
-            _playerInPort = player.X == X && player.Y == Y;
+            return player.X == X && player.Y == Y;
         }
 
         public void BecomeVisited()
         {
-            if (_isVisited == false && _playerInPort)
-            {
-                _isVisited = true;
-                FuelInPort = 0;
-            }
+            IsAlreadyVisited = true;
+            FuelInPort = 0;
         }
 
         public void Draw(ConsoleColor defaultColor)
         {
             Console.SetCursorPosition(X, Y);
-            if (_isVisited)
+            if (IsAlreadyVisited)
             {
                 Console.BackgroundColor = ConsoleColor.DarkRed;
             }
@@ -297,25 +478,32 @@ namespace CSStudy
     {
         protected List<int[]> _field;
         protected int _hoursBeforeUpdateState;
-        public int FuelUsage { get; protected set; }
+        protected Random randomOfField;
+        public int FuelUsage { get { return GetFieldFuelUsage(randomOfField); } protected set { } }
         public bool IsActive { get { return _hoursBeforeUpdateState > 0; } }
 
         public Field(Map map, char letter, Random random)
         {
+            randomOfField = random;
             _field = map.GetCoordinatesOfChar(letter);
-            _hoursBeforeUpdateState = random.Next(20, 30);
+            _hoursBeforeUpdateState = random.Next(10, 30);
         }
 
         public abstract void SpendOneHour();
 
         public abstract void UpdateState(Random random);
 
+        public abstract int GetFieldFuelUsage(Random random);
+
         public virtual void Draw(ConsoleColor defaultColor)
         {
             for (int i = 0; i < _field.Count; i++)
             {
                 Console.SetCursorPosition(_field[i][0], _field[i][1]);
-                Console.Write('_');
+                if (IsActive)
+                    Console.Write('_');
+                else
+                    Console.Write(' ');
             }
         }
 
@@ -333,10 +521,7 @@ namespace CSStudy
 
     class Cyclone : Field, IDrawable
     {
-        public Cyclone(Map map, char letter, Random random) : base(map, letter, random) 
-        {
-            FuelUsage = 1;
-        }
+        public Cyclone(Map map, char letter, Random random) : base(map, letter, random) { }
 
         public override void SpendOneHour()
         {
@@ -345,12 +530,16 @@ namespace CSStudy
 
         public override void UpdateState(Random random)
         {
-            if (_hoursBeforeUpdateState <= random.Next(-20, -25))
+            if (_hoursBeforeUpdateState <= random.Next(-25, -15))
             {
-                _hoursBeforeUpdateState = random.Next(20, 30); 
+                _hoursBeforeUpdateState = random.Next(10, 30);
             }
         }
 
+        public override int GetFieldFuelUsage(Random random)
+        {
+            return random.Next(0, 2);
+        }
         public override void Draw(ConsoleColor defaultColor)
         {
             Console.ForegroundColor = ConsoleColor.DarkCyan;
@@ -361,14 +550,21 @@ namespace CSStudy
 
     class Pirates : Field, IDrawable
     {
-        public Pirates(Map map, char letter, Random random) : base(map, letter, random)
-        {
-            FuelUsage = 50;
-        }
+        public Pirates(Map map, char letter, Random random) : base(map, letter, random) { }
+
 
         public override void SpendOneHour() { }
 
         public override void UpdateState(Random random) { }
+
+        public override int GetFieldFuelUsage(Random random)
+        {
+            int[] values = new int[30];
+            values[0] = 50;
+            random.Shuffle(values);
+
+            return values[0];
+        }
 
         public override void Draw(ConsoleColor defaultColor)
         {
@@ -376,6 +572,7 @@ namespace CSStudy
             base.Draw(defaultColor);
             Console.ForegroundColor = defaultColor;
         }
+
     }
 
 }
