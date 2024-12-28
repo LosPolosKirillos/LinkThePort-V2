@@ -476,17 +476,17 @@ namespace CSStudy
 
     abstract class Field : IDrawable
     {
-        protected List<int[]> _field;
-        protected int _hoursBeforeUpdateState;
-        protected Random randomOfField;
-        public int FuelUsage { get { return GetFieldFuelUsage(randomOfField); } protected set { } }
-        public bool IsActive { get { return _hoursBeforeUpdateState > 0; } }
+        protected List<int[]> FieldCoordinates;
+        protected int HoursBeforeUpdateState;
+        protected Random RandomOfField;
+        public int FuelUsage { get { return GetFieldFuelUsage(RandomOfField); } protected set { } }
+        public bool IsActive { get { return HoursBeforeUpdateState > 0; } }
 
         public Field(Map map, char letter, Random random)
         {
-            randomOfField = random;
-            _field = map.GetCoordinatesOfChar(letter);
-            _hoursBeforeUpdateState = random.Next(10, 30);
+            RandomOfField = random;
+            FieldCoordinates = map.GetCoordinatesOfChar(letter);
+            HoursBeforeUpdateState = random.Next(10, 30);
         }
 
         public abstract void SpendOneHour();
@@ -497,9 +497,9 @@ namespace CSStudy
 
         public virtual void Draw(ConsoleColor defaultColor)
         {
-            for (int i = 0; i < _field.Count; i++)
+            for (int i = 0; i < FieldCoordinates.Count; i++)
             {
-                Console.SetCursorPosition(_field[i][0], _field[i][1]);
+                Console.SetCursorPosition(FieldCoordinates[i][0], FieldCoordinates[i][1]);
                 if (IsActive)
                     Console.Write('_');
                 else
@@ -509,9 +509,9 @@ namespace CSStudy
 
         public bool IsPlayerInField(Player player)
         {
-            for (int i = 0; i < _field.Count; i++)
+            for (int i = 0; i < FieldCoordinates.Count; i++)
             {
-                if (_field[i][0] == player.X && _field[i][1] == player.Y)
+                if (FieldCoordinates[i][0] == player.X && FieldCoordinates[i][1] == player.Y)
                     return true;
             }
 
@@ -525,14 +525,14 @@ namespace CSStudy
 
         public override void SpendOneHour()
         {
-            _hoursBeforeUpdateState--;
+            HoursBeforeUpdateState--;
         }
 
         public override void UpdateState(Random random)
         {
-            if (_hoursBeforeUpdateState <= random.Next(-25, -15))
+            if (HoursBeforeUpdateState <= random.Next(-25, -15))
             {
-                _hoursBeforeUpdateState = random.Next(10, 30);
+                HoursBeforeUpdateState = random.Next(10, 30);
             }
         }
 
